@@ -1,0 +1,46 @@
+version: '3.7'
+
+services:
+  traefik:
+    image: traefik:v2.4
+    command:
+      - --log.level=DEBUG
+      # Docker
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      # Entrypoints
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      # SSL configuration / DNS Challenge
+      - --certificatesresolvers.le.acme.dnschallenge.provider=cloudflare
+      - --certificatesresolvers.le.acme.dnschallenge.delaybeforecheck=0
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      # Global HTTP -> HTTPS
+      - --entrypoints.web.http.redirections.entryPoint.to=websecure
+      - --entrypoints.web.http.redirections.entryPoint.scheme=https
+      # Enable dashboard
+      - --api.insecure=false
+      - --api.dashboard=true
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - traefik
+    environment:
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./letsencrypt:/letsencrypt
+    restart: always
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.traefik_api.tls=true
+      - traefik.http.routers.traefik_api.tls.certresolver=le
+      - traefik.http.routers.traefik_api.entrypoints=websecure
+      - traefik.http.routers.traefik_api.rule=Host(`$TRAEFIK_HOST`)
+      - traefik.http.routers.traefik_api.service=api@internal
+
+networks:
+  traefik:
+    external:
+      name: traefik_proxy
